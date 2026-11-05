@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<meta name="theme-color" content="#000000" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="RING" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23000'/%3E%3Ccircle cx='32' cy='32' r='19' fill='none' stroke='%23222' stroke-width='7'/%3E%3Cpath d='M32 13 A19 19 0 1 1 13.9 37.9' fill='none' stroke='%23FF6B4A' stroke-width='7' stroke-linecap='round'/%3E%3C/svg%3E" />
+<title>RING</title>
+<style>
+  :root {
+    --bg: #000;
+    --fg: #F5F5F7;
+    --dim: rgba(235, 235, 245, .45);
+    --faint: rgba(235, 235, 245, .12);
+    --card: #111113;
+    --focus: #FF6B4A;
+    --short: #36D6C3;
+    --long: #6E8BFF;
+    --sw: #FFD60A;
+    --accent: var(--focus);
+    --sat: env(safe-area-inset-top, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); overflow: hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", "Hiragino Sans", sans-serif;
+    -webkit-user-select: none; user-select: none; -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+
+  #app {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    padding: calc(var(--sat) + 14px) max(20px, env(safe-area-inset-right)) calc(var(--sab) + 18px) max(20px, env(safe-area-inset-left));
+  }
+
+  /* ── 上のバー ── */
+  .bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; flex: none; }
+  .today { font-size: 14px; color: var(--dim); font-variant-numeric: tabular-nums; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .today b { color: var(--fg); font-weight: 600; }
+  .seg { display: flex; background: var(--card); border-radius: 999px; padding: 4px; border: 1px solid var(--faint); }
+  .seg button { padding: 8px 18px; border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--dim); transition: background .2s, color .2s; white-space: nowrap; }
+  .seg button.on { background: #2C2C2E; color: var(--fg); }
+  .bar-r { justify-self: end; display: flex; gap: 6px; }
+  .icon-btn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: var(--dim); transition: color .2s, background .2s; }
+  .icon-btn:active { background: var(--faint); }
+  .icon-btn svg { width: 22px; height: 22px; }
+  .icon-btn.on { color: var(--fg); }
+
+  /* ── 本体 ── */
+  .stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; gap: clamp(24px, 5vw, 72px); }
+  .ring-wrap { position: relative; flex: none; }
+  .ring-wrap svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .track { fill: none; stroke: #1C1C1E; }
+  .arc { fill: none; stroke: var(--accent); stroke-linecap: round; filter: drop-shadow(0 0 14px color-mix(in srgb, var(--accent) 55%, transparent)); transition: stroke .5s; }
+  .head { fill: #fff; filter: drop-shadow(0 0 8px var(--accent)); transition: opacity .3s; }
+  .ticks line { stroke: #2A2A2C; stroke-linecap: round; }
+  .center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+  .phase { font-size: calc(var(--rs) * .045); font-weight: 600; letter-spacing: .32em; color: var(--accent); text-indent: .32em; transition: color .5s; }
+  .time { font-size: calc(var(--rs) * .23); font-weight: 200; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1; margin: calc(var(--rs) * .025) 0; }
+  .time .cs { font-size: .42em; color: var(--dim); font-weight: 300; margin-left: .06em; }
+  .sub { font-size: calc(var(--rs) * .036); color: var(--dim); font-variant-numeric: tabular-nums; height: 1.4em; display: flex; align-items: center; gap: calc(var(--rs) * .016); }
+  .dot { width: calc(var(--rs) * .018); height: calc(var(--rs) * .018); border-radius: 50%; background: #3A3A3C; transition: background .3s; }
+  .dot.done { background: var(--focus); }
+  .dot.now { background: transparent; box-shadow: inset 0 0 0 2px var(--focus); }
+  .paused .time { animation: blink 1.6s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: .35; } }
+
+  .side { display: flex; flex-direction: column; align-items: center; gap: 28px; min-width: 0; }
+  .ctrls { display: flex; align-items: center; gap: 28px; }
+  .cbtn { width: 72px; height: 72px; border-radius: 50%; background: #1C1C1E; display: grid; place-items: center; font-size: 15px; font-weight: 600; color: var(--fg); transition: transform .12s, background .2s; }
+  .cbtn svg { width: 26px; height: 26px; }
+  .cbtn:active { transform: scale(.93); }
+  .cbtn.main { width: 104px; height: 104px; background: var(--accent); color: #000; transition: transform .12s, background .5s; box-shadow: 0 0 40px color-mix(in srgb, var(--accent) 35%, transparent); }
+  .cbtn.main svg { width: 38px; height: 38px; }
+  .cbtn.main.stop { background: #3A1512; color: #FF6961; box-shadow: none; }
+  .cbtn:disabled { opacity: .3; }
+  .hint { font-size: 13px; color: var(--dim); text-align: center; line-height: 1.6; min-height: 1.6em; }
+
+  .laps { width: min(340px, 80vw); max-height: 36vh; overflow-y: auto; -webkit-overflow-scrolling: touch; border-top: 1px solid var(--faint); }
+  .lap { display: grid; grid-template-columns: 3.5em 1fr 1fr; padding: 11px 4px; border-bottom: 1px solid var(--faint); font-variant-numeric: tabular-nums; font-size: 16px; }
+  .lap span:nth-child(2) { text-align: right; }
+  .lap span:nth-child(3) { text-align: right; color: var(--dim); font-size: 14px; align-self: center; }
+  .lap.best span:nth-child(2) { color: #30D158; }
+  .lap.worst span:nth-child(2) { color: #FF6961; }
+  .lap.cur { color: var(--dim); }
+
+  /* 横向き（iPad置き）: リング左・操作右 */
+  @media (orientation: landscape) {
+    .stage { flex-direction: row; }
+    .side { width: min(360px, 34vw); }
+    .laps { max-height: 42vh; width: 100%; }
+  }
+  @media (orientation: portrait) {
+    .stage { flex-direction: column; }
+  }
+
+  /* フォーカスモード（操作を隠す） */
+  .zen .bar, .zen .side { opacity: 0; pointer-events: none; }
+  .bar, .side { transition: opacity .4s; }
+  .zen-tip { position: fixed; left: 50%; bottom: calc(var(--sab) + 18px); transform: translateX(-50%); font-size: 12px; color: var(--dim); opacity: 0; transition: opacity .4s; pointer-events: none; }
+  .zen .zen-tip { opacity: .7; }
+
+  /* 終了時のフラッシュ */
+  .flash { position: fixed; inset: 0; background: var(--accent); opacity: 0; pointer-events: none; }
+  .flash.go { animation: flash 1.8s ease-out; }
+  @keyframes flash { 0% { opacity: .55; } 100% { opacity: 0; } }
+
+  /* ── 設定シート ── */
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.6); opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 10; }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+  .sheet {
+    position: fixed; left: 50%; bottom: 0; width: min(520px, 100%); transform: translate(-50%, 105%);
+    max-height: calc(100% - var(--sat) - 16px); overflow-y: auto;
+    background: #1C1C1E; border-radius: 22px 22px 0 0; padding: 10px 20px calc(var(--sab) + 24px);
+    transition: transform .32s cubic-bezier(.2,.8,.2,1); z-index: 11;
+  }
+  .sheet.open { transform: translate(-50%, 0); }
+  .grab { width: 38px; height: 5px; border-radius: 3px; background: #48484A; margin: 0 auto 14px; }
+  .sheet h2 { font-size: 17px; margin: 0 0 16px; text-align: center; font-weight: 600; }
+  .group { background: #2C2C2E; border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
+  .row { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; min-height: 50px; gap: 12px; }
+  .row + .row { border-top: 1px solid rgba(84,84,88,.5); }
+  .row label { font-size: 16px; display: flex; align-items: center; gap: 10px; }
+  .sw-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .stepper { display: flex; align-items: center; gap: 4px; }
+  .stepper button { width: 36px; height: 32px; border-radius: 8px; background: #3A3A3C; font-size: 18px; line-height: 1; }
+  .stepper button:active { background: #48484A; }
+  .stepper output { min-width: 4.2em; text-align: center; font-variant-numeric: tabular-nums; font-size: 16px; }
+  .tog { width: 51px; height: 31px; border-radius: 999px; background: #39393D; position: relative; transition: background .2s; flex: none; }
+  .tog::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; transition: transform .2s; box-shadow: 0 2px 4px rgba(0,0,0,.3); }
+  .tog.on { background: #30D158; }
+  .tog.on::after { transform: translateX(20px); }
+  .note { font-size: 13px; color: var(--dim); line-height: 1.6; margin: -12px 4px 20px; }
+  .done-btn { width: 100%; padding: 14px; border-radius: 12px; background: #2C2C2E; font-size: 17px; font-weight: 600; }
+  .ver { text-align: center; font-size: 12px; color: #636366; margin-top: 16px; }
+
+  .toast { position: fixed; left: 50%; top: calc(var(--sat) + 70px); transform: translate(-50%, -10px); background: #2C2C2E; padding: 10px 18px; border-radius: 999px; font-size: 14px; opacity: 0; transition: opacity .25s, transform .25s; pointer-events: none; z-index: 20; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .update { position: fixed; left: 50%; bottom: calc(var(--sab) + 16px); transform: translateX(-50%); background: #2C2C2E; border-radius: 14px; padding: 10px 10px 10px 16px; display: none; align-items: center; gap: 12px; font-size: 14px; z-index: 30; }
+  .update button { background: #0A84FF; color: #fff; padding: 8px 14px; border-radius: 10px; font-weight: 600; }
+
+  @media (max-width: 600px) {
+    .bar { grid-template-columns: 0 auto 1fr; gap: 6px; } .today { display: none; }
+    .seg button { padding: 8px 12px; font-size: 13px; } .bar-r { gap: 0; }
+  }
+  @media (max-height: 560px) and (orientation: landscape) {
+    .cbtn { width: 60px; height: 60px; } .cbtn.main { width: 84px; height: 84px; }
+    .side { gap: 18px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="bar">
+    <div class="today" id="today"></div>
+    <div class="seg" role="tablist">
+      <button data-mode="pomo" class="on">ポモドーロ</button>
+      <button data-mode="sw">ストップウォッチ</button>
+    </div>
+    <div class="bar-r">
+      <button class="icon-btn" id="btnZen" aria-label="操作を隠す">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+      </button>
+      <button class="icon-btn" id="btnSet" aria-label="設定">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="ring-wrap" id="ringWrap">
+      <svg viewBox="0 0 400 400">
+        <g class="ticks" id="ticks"></g>
+        <circle class="track" cx="200" cy="200" r="170" stroke-width="14" />
+        <circle class="arc" id="arc" cx="200" cy="200" r="170" stroke-width="14" transform="rotate(-90 200 200)" />
+        <circle class="head" id="head" r="5" cx="200" cy="30" />
+      </svg>
+      <div class="center" id="center">
+        <div class="phase" id="phase">集中</div>
+        <div class="time" id="time">25:00</div>
+        <div class="sub" id="sub"></div>
+      </div>
+    </div>
+    <div class="side">
+      <div class="ctrls">
+        <button class="cbtn" id="btnL" aria-label="リセット"></button>
+        <button class="cbtn main" id="btnMain" aria-label="スタート"></button>
+        <button class="cbtn" id="btnR" aria-label="スキップ"></button>
+      </div>
+      <div class="hint" id="hint"></div>
+      <div class="laps" id="laps" hidden></div>
+    </div>
+  </div>
+  <div class="zen-tip">画面をタップで操作を表示</div>
+</div>
+
+<div class="flash" id="flash"></div>
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet" role="dialog" aria-label="設定">
+  <div class="grab"></div>
+  <h2>設定</h2>
+  <div class="group">
+    <div class="row"><label><span class="sw-dot" style="background:var(--focus)"></span>集中</label><div class="stepper" data-k="focus"><button data-d="-1">−</button><output></output><button data-d="1">＋</button></div></div>
+    <div class="row"><label><span class="sw-dot" style="background:var(--short)"></span>休憩</label><div class="stepper" data-k="short"><button data-d="-1">−</button><output></output><button data-d="1">＋</button></div></div>
+    <div class="row"><label><span class="sw-dot" style="background:var(--long)"></span>長い休憩</label><div class="stepper" data-k="long"><button data-d="-1">−</button><output></output><button data-d="1">＋</button></div></div>
+    <div class="row"><label>長い休憩までの回数</label><div class="stepper" data-k="every"><button data-d="-1">−</button><output></output><button data-d="1">＋</button></div></div>
+  </div>
+  <div class="group">
+    <div class="row"><label>次を自動でスタート</label><button class="tog" data-t="auto" aria-label="次を自動でスタート"></button></div>
+    <div class="row"><label>終わったら音で知らせる</label><button class="tog" data-t="sound" aria-label="音で知らせる"></button></div>
+    <div class="row"><label>動いている間は画面を消さない</label><button class="tog" data-t="wake" aria-label="画面を消さない"></button></div>
+  </div>
+  <p class="note">設定の変更は次のタイマーから反映されます。iPadが画面ロック中やほかのアプリを使っている間は、音が鳴りません（時間は正しく進みます）。</p>
+  <button class="done-btn" id="btnDone">完了</button>
+  <div class="ver" id="ver"></div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="update" id="update"><span>新しいバージョンがあります</span><button id="btnUpdate">更新</button></div>
+
+<script>
+(() => {
+  'use strict';
+  const APP_VERSION = '1.0.0';
+  const K_SET = 'ring.settings.v1', K_POMO = 'ring.pomo.v1', K_SW = 'ring.sw.v1', K_LOG = 'ring.log.v1', K_MODE = 'ring.mode.v1';
+  const $ = (id) => document.getElementById(id);
+  const load = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : Object.assign(Array.isArray(d) ? [] : {}, d, v); } catch { return d; } };
+  const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+  const pad = (n) => String(n).padStart(2, '0');
+
+  const LIMITS = { focus: [1, 120], short: [1, 60], long: [1, 90], every: [2, 8] };
+  const set = load(K_SET, { focus: 25, short: 5, long: 15, every: 4, auto: true, sound: true, wake: true });
+  let mode = localStorage.getItem(K_MODE) === 'sw' ? 'sw' : 'pomo';
+  // pomo: phase focus|short|long, round(1..every), running, endAt, left(ms), total(ms)
+  const pomo = load(K_POMO, { phase: 'focus', round: 1, running: false, endAt: 0, left: 0, total: 0 });
+  if (!pomo.total) { pomo.total = pomo.left = set.focus * 60000; }
+  const sw = load(K_SW, { running: false, startAt: 0, acc: 0, laps: [] });
+  const log = load(K_LOG, { day: '', count: 0, min: 0 });
+
+  const PHASE = { focus: ['集中', '--focus'], short: ['休憩', '--short'], long: ['長い休憩', '--long'] };
+  const R = 170, C = 2 * Math.PI * R;
+  const arc = $('arc'), head = $('head');
+  arc.style.strokeDasharray = C;
+
+  // 目盛り（60本）
+  (() => {
+    let s = '';
+    for (let i = 0; i < 60; i++) {
+      const a = i / 60 * Math.PI * 2, big = i % 5 === 0;
+      const r1 = 192, r2 = big ? 184 : 188;
+      s += `<line x1="${200 + Math.sin(a) * r1}" y1="${200 - Math.cos(a) * r1}" x2="${200 + Math.sin(a) * r2}" y2="${200 - Math.cos(a) * r2}" stroke-width="${big ? 2.4 : 1.2}"/>`;
+    }
+    $('ticks').innerHTML = s;
+  })();
+
+  const ICON = {
+    play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.6-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>',
+    pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4.2" height="14" rx="1.2"/><rect x="13.8" y="5" width="4.2" height="14" rx="1.2"/></svg>',
+    reset: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>',
+    skip: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 6.2v11.6a.8.8 0 0 0 1.2.7l8.8-5.8a.8.8 0 0 0 0-1.4L6.2 5.5a.8.8 0 0 0-1.2.7z"/><rect x="16.5" y="5" width="2.6" height="14" rx="1"/></svg>',
+  };
+
+  // ── 今日の記録 ──
+  const todayKey = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+  function renderToday() {
+    if (log.day !== todayKey()) { log.day = todayKey(); log.count = 0; log.min = 0; save(K_LOG, log); }
+    const h = Math.floor(log.min / 60), m = log.min % 60;
+    $('today').innerHTML = mode === 'pomo'
+      ? `今日 <b>${log.count}</b>回 · <b>${h ? h + '時間' : ''}${m}分</b>集中`
+      : '';
+  }
+
+  // ── 音 ──
+  let ctx = null;
+  function unlockAudio() {
+    try {
+      if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') ctx.resume();
+      const o = ctx.createOscillator(), g = ctx.createGain(); g.gain.value = 0; o.connect(g).connect(ctx.destination); o.start(); o.stop(ctx.currentTime + .01);
+    } catch {}
+  }
+  function chime(kind) {
+    if (!set.sound || !ctx) return;
+    const notes = kind === 'focus' ? [784, 988, 1175] : [1175, 988, 784];
+    const t0 = ctx.currentTime + .02;
+    for (let rep = 0; rep < 2; rep++) notes.forEach((f, i) => {
+      const t = t0 + rep * 1.1 + i * .18, o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.32, t + .015); g.gain.exponentialRampToValueAtTime(.0008, t + 1.2);
+      o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 1.25);
+    });
+  }
+
+  // ── 画面を消さない ──
+  let lock = null;
+  async function syncWake() {
+    const want = set.wake && (mode === 'pomo' ? pomo.running : sw.running) && document.visibilityState === 'visible';
+    try {
+      if (want && !lock && 'wakeLock' in navigator) { lock = await navigator.wakeLock.request('screen'); lock.addEventListener('release', () => { lock = null; }); }
+      else if (!want && lock) { await lock.release(); lock = null; }
+    } catch { lock = null; }
+  }
+
+  // ── 共通描画 ──
+  const fmtMS = (ms) => { const s = Math.ceil(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${pad(m)}:${pad(s % 60)}`; };
+  const fmtSW = (ms, cs = true) => {
+    const t = Math.floor(ms / 10), c = t % 100, s = Math.floor(t / 100) % 60, m = Math.floor(t / 6000) % 60, h = Math.floor(t / 360000);
+    const main = h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+    return cs ? `${main}<span class="cs">.${pad(c)}</span>` : main;
+  };
+  function setRing(frac) {
+    frac = Math.max(0, Math.min(1, frac));
+    arc.style.strokeDashoffset = C * (1 - frac);
+    const a = frac * Math.PI * 2;
+    head.setAttribute('cx', 200 + Math.sin(a) * R); head.setAttribute('cy', 200 - Math.cos(a) * R);
+    head.style.opacity = frac > 0.002 ? 1 : 0;
+  }
+  function sizeRing() {
+    const st = document.querySelector('.stage').getBoundingClientRect();
+    const land = innerWidth > innerHeight;
+    const side = document.querySelector('.side').getBoundingClientRect();
+    let s = land ? Math.min(st.height * .9, st.width - side.width - 80) : Math.min(st.width * .86, st.height - side.height - 40);
+    s = Math.max(200, Math.min(s, 760));
+    const w = $('ringWrap'); w.style.width = w.style.height = s + 'px';
+    document.documentElement.style.setProperty('--rs', s + 'px');
+  }
+
+  // ── ポモドーロ ──
+  const durOf = (p) => (p === 'focus' ? set.focus : p === 'short' ? set.short : set.long) * 60000;
+  const leftNow = () => pomo.running ? pomo.endAt - Date.now() : pomo.left;
+  function pomoStart() { unlockAudio(); pomo.running = true; pomo.endAt = Date.now() + pomo.left; save(K_POMO, pomo); syncWake(); render(); }
+  function pomoPause() { pomo.left = Math.max(0, pomo.endAt - Date.now()); pomo.running = false; save(K_POMO, pomo); syncWake(); render(); }
+  function pomoReset() {
+    if (pomo.left === pomo.total && !pomo.running) { // 2回目のリセットで1ラウンド目へ
+      pomo.phase = 'focus'; pomo.round = 1;
+    }
+    pomo.running = false; pomo.total = pomo.left = durOf(pomo.phase); save(K_POMO, pomo); syncWake(); render();
+  }
+  function nextPhase(completed) {
+    const was = pomo.phase;
+    if (was === 'focus') {
+      if (completed) { renderToday(); log.count++; log.min += Math.round(pomo.total / 60000); save(K_LOG, log); }
+      pomo.phase = pomo.round >= set.every ? 'long' : 'short';
+    } else {
+      pomo.round = was === 'long' ? 1 : pomo.round + 1;
+      pomo.phase = 'focus';
+    }
+    pomo.total = pomo.left = durOf(pomo.phase);
+    if (completed && set.auto) { pomo.running = true; pomo.endAt = Date.now() + pomo.left; }
+    else pomo.running = false;
+    save(K_POMO, pomo); syncWake();
+  }
+  function pomoFinish() {
+    const was = pomo.phase;
+    nextPhase(true);
+    chime(was);
+    const f = $('flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+    toast(was === 'focus' ? 'おつかれさま。休憩しよう' : '休憩おわり。集中しよう');
+    renderToday(); render();
+  }
+  function renderPomo() {
+    const [label, color] = PHASE[pomo.phase];
+    document.documentElement.style.setProperty('--accent', `var(${color})`);
+    const left = Math.max(0, leftNow());
+    $('phase').textContent = label;
+    $('time').textContent = fmtMS(left);
+    setRing(left / pomo.total);
+    let dots = '';
+    for (let i = 1; i <= set.every; i++) dots += `<span class="dot ${i < pomo.round || (i === pomo.round && pomo.phase !== 'focus') ? 'done' : i === pomo.round ? 'now' : ''}"></span>`;
+    $('sub').innerHTML = dots;
+    const btn = $('btnMain');
+    btn.innerHTML = pomo.running ? ICON.pause : ICON.play; btn.classList.remove('stop');
+    btn.setAttribute('aria-label', pomo.running ? '一時停止' : 'スタート');
+    $('btnL').innerHTML = ICON.reset; $('btnL').setAttribute('aria-label', 'リセット'); $('btnL').disabled = false;
+    $('btnR').innerHTML = ICON.skip; $('btnR').setAttribute('aria-label', 'スキップ'); $('btnR').disabled = false;
+    const nxt = pomo.phase === 'focus' ? (pomo.round >= set.every ? '長い休憩' : '休憩') : '集中';
+    const nd = durOf(pomo.phase === 'focus' ? (pomo.round >= set.every ? 'long' : 'short') : 'focus') / 60000;
+    $('hint').textContent = `つぎは ${nxt} ${nd}分`;
+    $('center').classList.toggle('paused', !pomo.running && left < pomo.total);
+    document.title = pomo.running ? `${fmtMS(left)} ${label} — RING` : 'RING';
+  }
+
+  // ── ストップウォッチ ──
+  const swNow = () => sw.acc + (sw.running ? Date.now() - sw.startAt : 0);
+  function swToggle() {
+    if (sw.running) { sw.acc += Date.now() - sw.startAt; sw.running = false; }
+    else { sw.startAt = Date.now(); sw.running = true; }
+    save(K_SW, sw); syncWake(); render(); renderLaps();
+  }
+  function swLapReset() {
+    if (sw.running) { sw.laps.push(swNow()); save(K_SW, sw); renderLaps(); }
+    else { sw.acc = 0; sw.laps = []; save(K_SW, sw); render(); renderLaps(); }
+  }
+  function renderLaps() {
+    const el = $('laps');
+    el.hidden = mode !== 'sw' || (!sw.laps.length && !sw.running && !sw.acc);
+    if (el.hidden) return;
+    const splits = sw.laps.map((t, i) => t - (i ? sw.laps[i - 1] : 0));
+    let best = -1, worst = -1;
+    if (splits.length >= 2) { best = splits.indexOf(Math.min(...splits)); worst = splits.indexOf(Math.max(...splits)); }
+    let h = `<div class="lap cur"><span>${sw.laps.length + 1}</span><span id="curLap"></span><span></span></div>`;
+    for (let i = splits.length - 1; i >= 0; i--) h += `<div class="lap ${i === best ? 'best' : i === worst ? 'worst' : ''}"><span>${i + 1}</span><span>${fmtSW(splits[i]).replace(/<[^>]+>/g, '')}</span><span>${fmtSW(sw.laps[i], false)}</span></div>`;
+    el.innerHTML = h;
+  }
+  function renderSW() {
+    document.documentElement.style.setProperty('--accent', 'var(--sw)');
+    const t = swNow();
+    $('phase').textContent = '計測';
+    $('time').innerHTML = fmtSW(t);
+    setRing((t % 60000) / 60000);
+    $('sub').textContent = sw.laps.length ? `ラップ ${sw.laps.length}` : '';
+    const btn = $('btnMain');
+    btn.innerHTML = sw.running ? '停止' : ICON.play;
+    btn.classList.toggle('stop', sw.running);
+    btn.setAttribute('aria-label', sw.running ? '停止' : 'スタート');
+    $('btnL').textContent = sw.running || !t ? 'ラップ' : 'リセット';
+    $('btnL').disabled = !sw.running && !t;
+    $('btnL').setAttribute('aria-label', $('btnL').textContent);
+    $('btnR').style.display = 'none';
+    $('hint').textContent = '';
+    $('center').classList.toggle('paused', !sw.running && t > 0);
+    const cl = $('curLap'); if (cl) cl.textContent = fmtSW(t - (sw.laps.at(-1) || 0)).replace(/<[^>]+>/g, '');
+    document.title = sw.running ? `${fmtSW(t, false)} — RING` : 'RING';
+  }
+
+  function render() {
+    $('btnR').style.display = '';
+    if (mode === 'pomo') renderPomo(); else renderSW();
+  }
+
+  // ── ループ ──
+  function tick() {
+    if (mode === 'pomo' || pomo.running) {
+      if (pomo.running && Date.now() >= pomo.endAt) pomoFinish();
+    }
+    if (mode === 'pomo' ? pomo.running : sw.running) render();
+    requestAnimationFrame(tick);
+  }
+
+  // ── 操作 ──
+  $('btnMain').onclick = () => { if (mode === 'pomo') { pomo.running ? pomoPause() : pomoStart(); } else { unlockAudio(); swToggle(); } };
+  $('btnL').onclick = () => { if (mode === 'pomo') pomoReset(); else swLapReset(); };
+  $('btnR').onclick = () => { if (mode === 'pomo') { nextPhase(false); render(); } };
+  document.querySelectorAll('.seg button').forEach((b) => b.onclick = () => setMode(b.dataset.mode));
+  function setMode(m) {
+    mode = m; localStorage.setItem(K_MODE, m);
+    document.querySelectorAll('.seg button').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
+    renderToday(); render(); renderLaps(); syncWake(); requestAnimationFrame(sizeRing);
+  }
+
+  // 操作を隠す（置いて眺める用）
+  let zen = false;
+  $('btnZen').onclick = (e) => { e.stopPropagation(); zen = true; document.body.classList.add('zen'); };
+  document.addEventListener('click', (e) => { if (zen && !e.target.closest('.sheet')) { zen = false; document.body.classList.remove('zen'); e.stopPropagation(); } }, true);
+
+  // キーボード（iPad＋キーボード用）
+  document.addEventListener('keydown', (e) => {
+    if ($('sheet').classList.contains('open')) { if (e.key === 'Escape') closeSheet(); return; }
+    if (e.code === 'Space') { e.preventDefault(); $('btnMain').click(); }
+    else if (e.key === 'r' || e.key === 'R') $('btnL').click();
+    else if (e.key === 'Tab') { e.preventDefault(); setMode(mode === 'pomo' ? 'sw' : 'pomo'); }
+  });
+
+  // ── 設定 ──
+  function renderSet() {
+    document.querySelectorAll('.stepper').forEach((s) => { const k = s.dataset.k; s.querySelector('output').textContent = k === 'every' ? `${set[k]}回` : `${set[k]}分`; });
+    document.querySelectorAll('.tog').forEach((t) => t.classList.toggle('on', !!set[t.dataset.t]));
+  }
+  let holdT = null;
+  document.querySelectorAll('.stepper button').forEach((b) => {
+    const step = () => {
+      const k = b.parentElement.dataset.k, [lo, hi] = LIMITS[k], d = +b.dataset.d;
+      set[k] = Math.max(lo, Math.min(hi, set[k] + d)); save(K_SET, set); renderSet();
+    };
+    b.addEventListener('pointerdown', () => { step(); let n = 0; holdT = setTimeout(function rep() { step(); holdT = setTimeout(rep, ++n > 8 ? 50 : 110); }, 420); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => b.addEventListener(ev, () => clearTimeout(holdT)));
+  });
+  document.querySelectorAll('.tog').forEach((t) => t.onclick = () => { set[t.dataset.t] = !set[t.dataset.t]; save(K_SET, set); renderSet(); syncWake(); if (t.dataset.t === 'sound' && set.sound) { unlockAudio(); } });
+  function openSheet() { renderSet(); $('sheet').classList.add('open'); $('scrim').classList.add('open'); }
+  function closeSheet() {
+    $('sheet').classList.remove('open'); $('scrim').classList.remove('open');
+    // 止まっていて手つかずなら、新しい長さをすぐ反映
+    if (!pomo.running && pomo.left === pomo.total) { pomo.total = pomo.left = durOf(pomo.phase); save(K_POMO, pomo); }
+    if (pomo.round > set.every) pomo.round = set.every;
+    render();
+  }
+  $('btnSet').onclick = openSheet; $('btnDone').onclick = closeSheet; $('scrim').onclick = closeSheet;
+  $('ver').textContent = `RING v${APP_VERSION}`;
+
+  let toastT;
+  function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600); }
+
+  // 復帰時: 裏で終わっていたフェーズを処理
+  function catchUp() {
+    if (pomo.running && Date.now() >= pomo.endAt) pomoFinish();
+    renderToday(); render(); syncWake();
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') catchUp(); else syncWake(); });
+  addEventListener('resize', sizeRing);
+  addEventListener('orientationchange', () => setTimeout(sizeRing, 300));
+
+  setMode(mode);
+  catchUp();
+  sizeRing();
+  requestAnimationFrame(tick);
+
+  // ── 自動アップデート ──
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    addEventListener('load', async () => {
+      try {
+        const reg = await navigator.serviceWorker.register('sw.js');
+        if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+        reg.addEventListener('updatefound', () => { const n = reg.installing; if (!n) return; n.addEventListener('statechange', () => { if (n.state === 'installed' && navigator.serviceWorker.controller) showUpdate(n); }); });
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => { if (refreshing) return; refreshing = true; location.reload(); });
+      } catch {}
+    });
+  }
+  function showUpdate(w) {
+    const u = $('update'); u.style.display = 'flex';
+    $('btnUpdate').onclick = () => { $('btnUpdate').disabled = true; $('btnUpdate').textContent = '更新中…'; w.postMessage('SKIP_WAITING'); };
+  }
+})();
+</script>
+</body>
+</html>
