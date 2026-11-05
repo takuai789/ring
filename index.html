@@ -219,7 +219,7 @@
     <div class="row"><label>終わったら音で知らせる</label><button class="tog" data-t="sound" aria-label="音で知らせる"></button></div>
     <div class="row"><label>動いている間は画面を消さない</label><button class="tog" data-t="wake" aria-label="画面を消さない"></button></div>
   </div>
-  <p class="note">設定の変更は次のタイマーから反映されます。iPadが画面ロック中やほかのアプリを使っている間は、音が鳴りません（時間は正しく進みます）。</p>
+  <p class="note">設定の変更は次のタイマーから反映されます。音は消音モードでも鳴ります（iOS 17以降）。画面ロック中やほかのアプリを使っている間は鳴らないので、置いて使うときは「画面を消さない」をオンにしてください（時間は正しく進みます）。</p>
   <button class="done-btn" id="btnDone">完了</button>
   <div class="ver" id="ver"></div>
 </div>
@@ -229,7 +229,7 @@
 <script>
 (() => {
   'use strict';
-  const APP_VERSION = '1.0.1';
+  const APP_VERSION = '1.1.0';
   const K_SET = 'ring.settings.v1', K_POMO = 'ring.pomo.v1', K_SW = 'ring.sw.v1', K_LOG = 'ring.log.v1', K_MODE = 'ring.mode.v1';
   const $ = (id) => document.getElementById(id);
   const load = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : Object.assign(Array.isArray(d) ? [] : {}, d, v); } catch { return d; } };
@@ -287,8 +287,15 @@
       const o = ctx.createOscillator(), g = ctx.createGain(); g.gain.value = 0; o.connect(g).connect(ctx.destination); o.start(); o.stop(ctx.currentTime + .01);
     } catch {}
   }
+  // 消音モードでも鳴らす（iOS 17以降の Audio Session API）。鳴らす間だけ「再生」扱いにして、終わったら元に戻す
+  let sessT = null;
+  function setSession(type) { try { if (navigator.audioSession) navigator.audioSession.type = type; } catch {} }
+  // 画面のどこかをさわったら音の準備をする（開き直した直後でも鳴るように）
+  ['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, () => { if (!ctx || ctx.state !== 'running') unlockAudio(); }, { capture: true, passive: true }));
   function chime(kind) {
     if (!set.sound || !ctx) return;
+    if (ctx.state === 'suspended') { try { ctx.resume(); } catch {} }
+    setSession('playback'); clearTimeout(sessT); sessT = setTimeout(() => setSession('auto'), 3500);
     const notes = kind === 'focus' ? [784, 988, 1175] : [1175, 988, 784];
     const t0 = ctx.currentTime + .02;
     for (let rep = 0; rep < 2; rep++) notes.forEach((f, i) => {
